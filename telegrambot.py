@@ -8,7 +8,7 @@ from aiogram import F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import default_state, State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 import time
 from config import TOKEN
 import datetime
@@ -36,6 +36,7 @@ def day_to_seconds(days):
 async def start_cmd(message: types.Message):
     if not BotBD.user_exists(message.from_user.id):
         BotBD.add_user(message.from_user.id)
+        await message.bot.send_message(message.from_user.id, f'Hi! {message.from_user.id}', reply_markup=kb.main)
     if BotBD.check_admin(message.from_user.id): 
         await message.bot.send_message(message.from_user.id, 'Hi!\n\nYou are logged in as admin', reply_markup=kb.main_admin)
     elif BotBD.get_sub_status(message.from_user.id):
@@ -46,6 +47,8 @@ async def start_cmd(message: types.Message):
 class FSMFillForm(StatesGroup):
     fill_id = State()
     fill_days = State()
+    msg = State()
+    send_msg = State()
 @dp.message(F.text.lower() == 'cancel', StateFilter(default_state))
 async def process_cancel_command(message: Message):
     if(BotBD.check_admin(message.from_user.id)):
@@ -76,7 +79,7 @@ async def process_id_sent(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(FSMFillForm.fill_id))
 async def warning_not_id(message: Message):
-    await message.answer(text='invalid syntax', reply_markup=kb.cancel)
+    await message.answer(text='You invalid', reply_markup=kb.cancel)
 
 @dp.message(StateFilter(FSMFillForm.fill_days),
             lambda x: x.text.isdigit() and 0 <= int(x.text) <= 365)
@@ -96,17 +99,29 @@ async def process_days_sent(message: Message, state: FSMContext):
 
 @dp.message(StateFilter(FSMFillForm.fill_days))
 async def warning_not_days(message: Message):
-    await message.answer(text='invalid syntax', reply_markup=kb.cancel)
+    await message.answer(text='You invalid', reply_markup=kb.cancel)
 
 @dp.message(F.text.lower() == 'buy a bot')
 async def Buy_Bot(message: types.Message):
     await message.answer(f"To buy a bot, send your UserID here\n\nYour UserID: <blockquote><code>{message.from_user.id}</code></blockquote>", parse_mode='html')
 
-@dp.message(F.text.lower() == 'send a message to everyone')
-async def Send_Message(message: types.Message):
+@dp.message(F.text.lower() == 'send a message to everyone', StateFilter(default_state))
+async def Send_Message(message: types.Message, state: FSMContext):
     if(BotBD.check_admin(message.from_user.id)):
-        await message.answer("")
+        await message.answer(text='Enter your message', reply_markup=kb.cancel)
+        await state.set_state(FSMFillForm.msg)
+    else:
+        await message.answer(text='You are not an admin', reply_markup=kb.main)
     
+
+@dp.message(StateFilter(FSMFillForm.msg))
+async def process_id_sent(message: Message, state: FSMContext):
+    await state.update_data(msg=message.text)
+    msg = await state.get_data()
+    msg_send = msg['msg']
+    await message.answer(text = msg_send, reply_markup=kb.notify_users, parse_mode='markdownV2')
+
+
 @dp.message(F.text.lower() == 'find out the number of days of subscription')
 async def Check_Sub(message: types.Message):
     if(not BotBD.check_admin(message.from_user.id)):
@@ -117,6 +132,39 @@ async def Check_Sub(message: types.Message):
             await message.answer(f'Before your subscription ends: {user_sub}', reply_markup=kb.main_sub)
     else:
         await message.answer('You admin', reply_markup=kb.main_admin)
+
+
+@dp.message(F.text.lower() == 'check users')
+async def CheckUsers(message: types.Message):
+    if(BotBD.check_admin(message.from_user.id)):
+        count = 0
+        count_sub = 0
+        for row in BotBD.get_users():
+            if BotBD.get_sub_status(row[0]):
+                count_sub+=1
+            else:
+                count+=1
+        await message.answer(f'Users:\n\nSub: {count_sub}\n\nUnsub: {count}', reply_markup=kb.main_admin)    
+
+
+@dp.callback_query(F.data == 'True_answer')
+async def True_answer(callback: CallbackQuery, state: FSMContext):
+    msg = await state.get_data()
+    msg_send = msg['msg']
+    await bot.send_message(callback.from_user.id, 'Message sent to all users', reply_markup=kb.main_admin)
+    for row in BotBD.get_users():
+        await bot.send_message(row[0], text = msg_send, parse_mode='markdownV2')
+    await callback.message.delete()
+    await state.clear()
+
+@dp.callback_query(F.data == 'False_answer')
+async def False_answer(callback: CallbackQuery, state: FSMContext):
+    await bot.send_message(callback.from_user.id, 'Message deleted', reply_markup=kb.main_admin)
+    await callback.message.delete()
+    await state.clear()
+
+
+            
 async def main():
     await dp.start_polling(bot)
 
