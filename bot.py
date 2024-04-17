@@ -3,7 +3,7 @@ from config import ADMIN_ID
 import time
 class BotBD:
     def __init__(self, db_file):
-        self.conn = sqlite3.connect(db_file)
+        self.conn = sqlite3.connect(db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
 
     def user_exists(self, user_id):
@@ -43,4 +43,6 @@ class BotBD:
                 if user_id == ADMIN_ID[i]:
                     return True
         return False
+    def close_conn(self):
+        self.conn.close()
 

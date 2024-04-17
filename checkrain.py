@@ -12,8 +12,6 @@ BotBD = BotBD('users.db')
 
 bot = Bot(token=TOKEN)
 
-loop = asyncio.new_event_loop()
-
 dp = Dispatcher()
 
 async def run_selenium():
@@ -52,9 +50,10 @@ async def run_selenium():
                         print(f'{current_time} | Finded rain')
                         for row in BotBD.get_users():
                             try:
-                                text_rain = f'Finded Rain: <b>{"{:.2f}".format(bonus)}</b>\n\nStatus: <u>in progress</u>'
-                                message = await bot.send_message(row[0], text_rain, parse_mode="html")
-                                message_ids.append((row[0], message.message_id))
+                                if(BotBD.get_sub_status(row[0]) or BotBD.check_admin(row[0])):
+                                    text_rain = f'Finded Rain: <b>{"{:.2f}".format(bonus)}</b>\n\nStatus: <u>in progress</u>'
+                                    message = await bot.send_message(row[0], text_rain, parse_mode="html")
+                                    message_ids.append((row[0], message.message_id))
                             except Exception as e:
                                 print(f"Error sending rain notification: {e}")
                         rain_event_found = True
@@ -106,4 +105,3 @@ async def run_selenium():
             except Exception as e:
                 current_time = datetime.now()
                 print(f'{current_time} | Exception in func CheckRain: {e}')
-            
